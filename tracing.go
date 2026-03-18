@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/fr11nik/slogx"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
@@ -25,6 +24,9 @@ type Telemetry struct {
 	meter  otelmetric.Meter
 	tracer oteltrace.Tracer
 	exporters
+
+	// slogMultiHandler — если передан, OTel bridge inject'ится в него.
+	slogMultiHandler *slogx.MultiHandler
 }
 
 type exporters struct {
@@ -40,6 +42,7 @@ func NewTelemetry(
 	opts ...Option,
 ) (*Telemetry, error) {
 	rp := newResource(serviceName, version)
+
 	telemetry := &Telemetry{}
 	for _, opt := range opts {
 		err := opt(telemetry)
@@ -62,11 +65,18 @@ func NewTelemetry(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create logger: %w", err)
 	}
-
 	global.SetLoggerProvider(lp)
-	slogx.InitLogging(os.Stdout, slogx.WithOtelSlogOption(
-		serviceName, otelslog.WithLoggerProvider(lp),
-	))
+
+	// Inject OTel slog bridge
+	otelHandler := otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))
+
+	if telemetry.slogMultiHandler != nil {
+		// Inject в уже существующий логгер
+		telemetry.slogMultiHandler.AddHandler(otelHandler)
+	} else {
+		// Fallback: создаём логгер с JSON + OTel (старое поведение)
+		slogx.InitLoggingJSON(nil, slogx.WithRawHandler(otelHandler))
+	}
 
 	mp, err := newMeterProvider(ctx, telemetry.exporters.metricExp, rp)
 	if err != nil {
@@ -83,10 +93,9 @@ func NewTelemetry(
 	tracer := tp.Tracer(serviceName)
 
 	tc := propagation.TraceContext{}
-	// Register the TraceContext propagator globally.
 	otel.SetTextMapPropagator(tc)
-
 	otel.SetErrorHandler(&localErrorHandler{ctx})
+
 	return &Telemetry{
 		lp:     lp,
 		mp:     mp,

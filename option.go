@@ -1,8 +1,21 @@
 package tracex
 
-import "context"
+import (
+	"context"
+
+	"github.com/fr11nik/slogx"
+)
 
 type Option func(t *Telemetry) error
+
+// WithSlogHandler позволяет передать уже инициализированный MultiHandler.
+// OTel log bridge будет inject'нут в него, вместо создания нового логгера.
+func WithSlogHandler(mh *slogx.MultiHandler) Option {
+	return func(t *Telemetry) error {
+		t.slogMultiHandler = mh
+		return nil
+	}
+}
 
 func WithLogConsoleExporter() Option {
 	return func(t *Telemetry) error {

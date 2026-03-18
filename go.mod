@@ -3,7 +3,7 @@ module github.com/fr11nik/tracex
 go 1.24.4
 
 require (
-	github.com/fr11nik/slogx v0.0.1
+	github.com/fr11nik/slogx v0.3.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.12.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.13.0
