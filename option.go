@@ -72,3 +72,10 @@ func WithSpanHTTPExporter(ctx context.Context, otlpEndpoint string) Option {
 		return err
 	}
 }
+
+func WithDefaultExporters() Option {
+	return func(t *Telemetry) error {
+		t.withDefaultExporters = true
+		return nil
+	}
+}

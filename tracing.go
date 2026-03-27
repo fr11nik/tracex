@@ -14,21 +14,19 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
-const (
-	defaultScrapeInterval = time.Second * 5
-)
-
 type Telemetry struct {
-	lp               *log.LoggerProvider
-	mp               *metric.MeterProvider
-	mpScrapeInterval time.Duration
-	tp               *trace.TracerProvider
-	meter            otelmetric.Meter
-	tracer           oteltrace.Tracer
+	lp                   *log.LoggerProvider
+	mp                   *metric.MeterProvider
+	mpScrapeInterval     time.Duration
+	tp                   *trace.TracerProvider
+	meter                otelmetric.Meter
+	tracer               oteltrace.Tracer
+	withDefaultExporters bool
 	exporters
 
 	// slogMultiHandler — если передан, OTel bridge inject'ится в него.
@@ -47,78 +45,95 @@ func NewTelemetry(
 	serviceName, version string,
 	opts ...Option,
 ) (*Telemetry, error) {
-	rp := newResource(serviceName, version)
-
-	telemetry := &Telemetry{}
+	t := &Telemetry{}
 	for _, opt := range opts {
-		err := opt(telemetry)
-		if err != nil {
+		if err := opt(t); err != nil {
 			return nil, err
 		}
 	}
 
-	if telemetry.logExp == nil {
-		telemetry.logExp, _ = logConsoleExporter()
-	}
-	if telemetry.traceExp == nil {
-		telemetry.traceExp, _ = spanConsoleExporter()
-	}
-	if telemetry.metricExp == nil {
-		telemetry.metricExp, _ = metricConsoleExporter()
-	}
-	if telemetry.mpScrapeInterval == time.Duration(0) {
-		telemetry.mpScrapeInterval = defaultScrapeInterval
+	if t.withDefaultExporters {
+		t.logExp, _ = logConsoleExporter()
+		t.metricExp, _ = metricConsoleExporter()
+		t.traceExp, _ = spanConsoleExporter()
 	}
 
-	lp, err := newLoggerProvider(ctx, telemetry.logExp, rp)
+	res := newResource(serviceName, version)
+
+	if err := t.setupLogging(ctx, serviceName, res); err != nil {
+		return nil, err
+	}
+	if err := t.setupMetrics(ctx, serviceName, res); err != nil {
+		return nil, err
+	}
+	if err := t.setupTracing(ctx, serviceName, res); err != nil {
+		return nil, err
+	}
+
+	return t, nil
+}
+
+func (t *Telemetry) setupLogging(ctx context.Context, serviceName string, res *resource.Resource) error {
+	if t.logExp == nil {
+		return nil
+	}
+
+	lp, err := newLoggerProvider(ctx, t.logExp, res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create logger: %w", err)
+		return fmt.Errorf("failed to create logger provider: %w", err)
 	}
 	global.SetLoggerProvider(lp)
+	t.lp = lp
 
-	// Inject OTel slog bridge
 	otelHandler := otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))
-
-	if telemetry.slogMultiHandler != nil {
-		// Inject в уже существующий логгер
-		telemetry.slogMultiHandler.AddHandler(otelHandler)
+	if t.slogMultiHandler != nil {
+		t.slogMultiHandler.AddHandler(otelHandler)
 	} else {
-		// Fallback: создаём логгер с JSON + OTel (старое поведение)
 		slogx.InitLoggingJSON(nil, slogx.WithRawHandler(otelHandler))
 	}
+	return nil
+}
 
-	mp, err := newMeterProvider(ctx, telemetry.metricExp, rp, telemetry.mpScrapeInterval)
+func (t *Telemetry) setupMetrics(ctx context.Context, serviceName string, res *resource.Resource) error {
+	if t.metricExp == nil {
+		return nil
+	}
+
+	mp, err := newMeterProvider(ctx, t.metricExp, res, t.mpScrapeInterval)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create meter: %w", err)
+		return fmt.Errorf("failed to create meter provider: %w", err)
 	}
 	otel.SetMeterProvider(mp)
-	meter := mp.Meter(serviceName)
+	t.mp = mp
+	t.meter = mp.Meter(serviceName)
+	return nil
+}
 
-	tp := newTracerProvider(ctx, telemetry.traceExp, rp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tracer: %w", err)
+func (t *Telemetry) setupTracing(ctx context.Context, serviceName string, res *resource.Resource) error {
+	if t.traceExp == nil {
+		return nil
 	}
+
+	tp := newTracerProvider(ctx, t.traceExp, res)
 	otel.SetTracerProvider(tp)
-	tracer := tp.Tracer(serviceName)
-
-	tc := propagation.TraceContext{}
-	otel.SetTextMapPropagator(tc)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	otel.SetErrorHandler(&localErrorHandler{ctx})
-
-	return &Telemetry{
-		lp:     lp,
-		mp:     mp,
-		tp:     tp,
-		meter:  meter,
-		tracer: tracer,
-	}, nil
+	t.tp = tp
+	t.tracer = tp.Tracer(serviceName)
+	return nil
 }
 
 // Shutdown shuts down the logger, meter, and tracer.
 func (t *Telemetry) Shutdown(ctx context.Context) {
-	t.lp.Shutdown(ctx)
-	t.mp.Shutdown(ctx)
-	t.tp.Shutdown(ctx)
+	if t.lp != nil {
+		t.lp.Shutdown(ctx)
+	}
+	if t.mp != nil {
+		t.mp.Shutdown(ctx)
+	}
+	if t.tp != nil {
+		t.tp.Shutdown(ctx)
+	}
 }
 
 type localErrorHandler struct {
