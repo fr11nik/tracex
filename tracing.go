@@ -2,6 +2,7 @@ package tracex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -39,8 +40,50 @@ type exporters struct {
 	traceExp  trace.SpanExporter
 }
 
-// NewTelemetry creates a new telemetry instance.
+var ErrAtLeastOneExporter = errors.New("at least one exporter must be provided or use withDefaultExporters option")
+
+// Deprecated: Use NewTelemetryProvider instead
 func NewTelemetry(
+	ctx context.Context,
+	serviceName, version string,
+	opts ...Option,
+) (*Telemetry, error) {
+	t := &Telemetry{}
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			return nil, err
+		}
+	}
+
+	if t.logExp == nil {
+		t.logExp, _ = logConsoleExporter()
+	}
+	if t.metricExp == nil {
+		t.metricExp, _ = metricConsoleExporter()
+	}
+	if t.traceExp == nil {
+		t.traceExp, _ = spanConsoleExporter()
+	}
+
+	res := newResource(serviceName, version)
+
+	if err := t.setupLogging(ctx, serviceName, res); err != nil {
+		return nil, err
+	}
+	if err := t.setupMetrics(ctx, serviceName, res); err != nil {
+		return nil, err
+	}
+	if err := t.setupTracing(ctx, serviceName, res); err != nil {
+		return nil, err
+	}
+
+	return t, nil
+}
+
+// NewTelemetryProvider creates a new telemetry instance.
+// Without any exporters and without WithDefaultExporters option
+// NewTelemetryProvider return error - ErrAtLeastOneExporter
+func NewTelemetryProvider(
 	ctx context.Context,
 	serviceName, version string,
 	opts ...Option,
@@ -56,6 +99,10 @@ func NewTelemetry(
 		t.logExp, _ = logConsoleExporter()
 		t.metricExp, _ = metricConsoleExporter()
 		t.traceExp, _ = spanConsoleExporter()
+	} else {
+		if t.logExp == nil && t.metricExp == nil && t.traceExp == nil {
+			return nil, ErrAtLeastOneExporter
+		}
 	}
 
 	res := newResource(serviceName, version)
