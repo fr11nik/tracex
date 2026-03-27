@@ -2,6 +2,7 @@ package tracex
 
 import (
 	"context"
+	"time"
 
 	"github.com/fr11nik/slogx"
 )
@@ -41,10 +42,11 @@ func WithMetricConsoleExporter() Option {
 	}
 }
 
-func WithMetricGrpcExporter(ctx context.Context, otlpEndpoint string) Option {
+func WithMetricGrpcExporter(ctx context.Context, otlpEndpoint string, scrapeInterval time.Duration) Option {
 	return func(t *Telemetry) error {
 		var err error
 		t.metricExp, err = metricGrpcExporter(ctx, otlpEndpoint)
+		t.mpScrapeInterval = scrapeInterval
 		return err
 	}
 }

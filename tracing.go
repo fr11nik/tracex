@@ -20,6 +20,8 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
+const defaultScrapeInterval = time.Minute * 1
+
 type Telemetry struct {
 	lp                   *log.LoggerProvider
 	mp                   *metric.MeterProvider
@@ -146,6 +148,9 @@ func (t *Telemetry) setupMetrics(ctx context.Context, serviceName string, res *r
 		return nil
 	}
 
+	if t.mpScrapeInterval == 0 {
+		t.mpScrapeInterval = defaultScrapeInterval
+	}
 	mp, err := newMeterProvider(ctx, t.metricExp, res, t.mpScrapeInterval)
 	if err != nil {
 		return fmt.Errorf("failed to create meter provider: %w", err)
