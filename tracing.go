@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/fr11nik/slogx"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
@@ -17,12 +18,17 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
+const (
+	defaultScrapeInterval = time.Second * 5
+)
+
 type Telemetry struct {
-	lp     *log.LoggerProvider
-	mp     *metric.MeterProvider
-	tp     *trace.TracerProvider
-	meter  otelmetric.Meter
-	tracer oteltrace.Tracer
+	lp               *log.LoggerProvider
+	mp               *metric.MeterProvider
+	mpScrapeInterval time.Duration
+	tp               *trace.TracerProvider
+	meter            otelmetric.Meter
+	tracer           oteltrace.Tracer
 	exporters
 
 	// slogMultiHandler — если передан, OTel bridge inject'ится в него.
@@ -51,17 +57,20 @@ func NewTelemetry(
 		}
 	}
 
-	if telemetry.exporters.logExp == nil {
-		telemetry.exporters.logExp, _ = logConsoleExporter()
+	if telemetry.logExp == nil {
+		telemetry.logExp, _ = logConsoleExporter()
 	}
-	if telemetry.exporters.traceExp == nil {
-		telemetry.exporters.traceExp, _ = spanConsoleExporter()
+	if telemetry.traceExp == nil {
+		telemetry.traceExp, _ = spanConsoleExporter()
 	}
-	if telemetry.exporters.metricExp == nil {
-		telemetry.exporters.metricExp, _ = metricConsoleExporter()
+	if telemetry.metricExp == nil {
+		telemetry.metricExp, _ = metricConsoleExporter()
+	}
+	if telemetry.mpScrapeInterval == time.Duration(0) {
+		telemetry.mpScrapeInterval = defaultScrapeInterval
 	}
 
-	lp, err := newLoggerProvider(ctx, telemetry.exporters.logExp, rp)
+	lp, err := newLoggerProvider(ctx, telemetry.logExp, rp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create logger: %w", err)
 	}
@@ -78,14 +87,14 @@ func NewTelemetry(
 		slogx.InitLoggingJSON(nil, slogx.WithRawHandler(otelHandler))
 	}
 
-	mp, err := newMeterProvider(ctx, telemetry.exporters.metricExp, rp)
+	mp, err := newMeterProvider(ctx, telemetry.metricExp, rp, telemetry.mpScrapeInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create meter: %w", err)
 	}
 	otel.SetMeterProvider(mp)
 	meter := mp.Meter(serviceName)
 
-	tp := newTracerProvider(ctx, telemetry.exporters.traceExp, rp)
+	tp := newTracerProvider(ctx, telemetry.traceExp, rp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tracer: %w", err)
 	}

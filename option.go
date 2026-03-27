@@ -20,7 +20,7 @@ func WithSlogHandler(mh *slogx.MultiHandler) Option {
 func WithLogConsoleExporter() Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.logExp, err = logConsoleExporter()
+		t.logExp, err = logConsoleExporter()
 		return err
 	}
 }
@@ -28,7 +28,7 @@ func WithLogConsoleExporter() Option {
 func WithLogGrpcExporter(ctx context.Context, otlpEndpoint string) Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.logExp, err = logGrpcExporter(ctx, otlpEndpoint)
+		t.logExp, err = logGrpcExporter(ctx, otlpEndpoint)
 		return err
 	}
 }
@@ -36,7 +36,7 @@ func WithLogGrpcExporter(ctx context.Context, otlpEndpoint string) Option {
 func WithMetricConsoleExporter() Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.metricExp, err = metricConsoleExporter()
+		t.metricExp, err = metricConsoleExporter()
 		return err
 	}
 }
@@ -44,7 +44,7 @@ func WithMetricConsoleExporter() Option {
 func WithMetricGrpcExporter(ctx context.Context, otlpEndpoint string) Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.metricExp, err = metricGrpcExporter(ctx, otlpEndpoint)
+		t.metricExp, err = metricGrpcExporter(ctx, otlpEndpoint)
 		return err
 	}
 }
@@ -52,7 +52,7 @@ func WithMetricGrpcExporter(ctx context.Context, otlpEndpoint string) Option {
 func WithSpanConsoleExporter() Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.traceExp, err = spanConsoleExporter()
+		t.traceExp, err = spanConsoleExporter()
 		return err
 	}
 }
@@ -60,15 +60,15 @@ func WithSpanConsoleExporter() Option {
 func WithSpanGrpcExporter(ctx context.Context, otlpEndpoint string) Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.traceExp, err = spanGrpcExporter(ctx, otlpEndpoint)
+		t.traceExp, err = spanGrpcExporter(ctx, otlpEndpoint)
 		return err
 	}
 }
 
-func WithSpanHttpExporter(ctx context.Context, otlpEndpoint string) Option {
+func WithSpanHTTPExporter(ctx context.Context, otlpEndpoint string) Option {
 	return func(t *Telemetry) error {
 		var err error
-		t.exporters.traceExp, err = spanHttpExporter(ctx, otlpEndpoint)
+		t.traceExp, err = spanHttpExporter(ctx, otlpEndpoint)
 		return err
 	}
 }
