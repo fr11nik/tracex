@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -55,7 +56,7 @@ func newMeterProvider(
 }
 
 // newResource creates a new OTEL resource with the service name and version.
-func newResource(serviceName string, serviceVersion string) *resource.Resource {
+func newResource(serviceName, serviceVersion, enviroment string) *resource.Resource {
 	hostName, _ := os.Hostname()
 
 	return resource.NewWithAttributes(
@@ -63,5 +64,6 @@ func newResource(serviceName string, serviceVersion string) *resource.Resource {
 		semconv.ServiceName(serviceName),
 		semconv.ServiceVersion(serviceVersion),
 		semconv.HostName(hostName),
+		attribute.String("environment", enviroment),
 	)
 }

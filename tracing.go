@@ -67,7 +67,7 @@ func NewTelemetry(
 		t.traceExp, _ = spanConsoleExporter()
 	}
 
-	res := newResource(serviceName, version)
+	res := newResource(serviceName, version, version)
 
 	if err := t.setupLogging(ctx, serviceName, res); err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func NewTelemetry(
 // NewTelemetryProvider return error - ErrAtLeastOneExporter
 func NewTelemetryProvider(
 	ctx context.Context,
-	serviceName, version string,
+	serviceName, version, enviroment string,
 	opts ...Option,
 ) (*Telemetry, error) {
 	t := &Telemetry{}
@@ -107,7 +107,7 @@ func NewTelemetryProvider(
 		}
 	}
 
-	res := newResource(serviceName, version)
+	res := newResource(serviceName, version, enviroment)
 
 	if err := t.setupLogging(ctx, serviceName, res); err != nil {
 		return nil, err
